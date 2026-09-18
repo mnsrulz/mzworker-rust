@@ -45,6 +45,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install protoc
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install protobuf
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            choco install protoc -y
+          fi
+
       - name: Build with cross
         uses: houseabsolute/actions-rust-cross@v1
         with:
