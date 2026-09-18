@@ -1,37 +1,82 @@
-use std::time::Instant;
+mod options {
+    tonic::include_proto!("options");
+}
 
-use duckdb::{Connection, Result};
+mod query;
+mod server;
 
-const QUERY: &str = r#"
-SELECT CAST(dt AS VARCHAR), CAST(expiration AS VARCHAR), COUNT(*) AS cnt
-FROM 'data/options_data/symbol=AMZN/*.parquet'
-GROUP BY dt, expiration
-ORDER BY dt DESC, expiration
-LIMIT 1000;
-"#;
+use std::path::PathBuf;
+use std::net::SocketAddr;
 
-fn main() -> Result<()> {
-    let connection = Connection::open_in_memory()?;
-    let start = Instant::now();
+use tokio::signal;
+use tracing::{info, error};
+use tracing_subscriber::EnvFilter;
 
-    let mut statement = connection.prepare(QUERY)?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>>>()?;
+use server::OptionsQueryServiceImpl;
 
-    let elapsed = start.elapsed();
+const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:50051";
+const DEFAULT_DATA_DIR: &str = "data/options_data";
 
-    println!("dt\texpiration\tcnt");
-    for (dt, expiration, count) in rows {
-        println!("{dt}\t{expiration}\t{count}");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
+        .init();
+
+    let listen_addr: SocketAddr = std::env::var("LISTEN_ADDR")
+        .unwrap_or_else(|_| DEFAULT_LISTEN_ADDR.to_string())
+        .parse()?;
+
+    let data_dir = std::env::var("DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(DEFAULT_DATA_DIR));
+
+    if !data_dir.exists() {
+        error!(path = %data_dir.display(), "Data directory does not exist");
+        std::process::exit(1);
     }
 
-    println!("\nElapsed time: {:.3} ms", elapsed.as_secs_f64() * 1000.0);
+    info!(addr = %listen_addr, "Server starting");
+    info!(path = %data_dir.display(), "Data directory");
+
+    let service_impl = OptionsQueryServiceImpl::new(data_dir);
+    let server = service_impl.into_server();
+
+    let svc = tonic::transport::Server::builder()
+        .add_service(server)
+        .serve_with_incoming_shutdown(listen_addr, shutdown_signal());
+
+    info!("Server listening on {}", listen_addr);
+
+    svc.await?;
+
+    info!("Shutting down...");
+
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    info!("Received shutdown signal");
 }
