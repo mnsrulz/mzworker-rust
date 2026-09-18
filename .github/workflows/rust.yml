@@ -63,8 +63,6 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --locked
           force-use-cross: ${{ matrix.platform.target == 'x86_64-unknown-linux-musl' }}
-          before-script-linux: |
-            apt-get update && apt-get install -y protobuf-compiler
 
       - name: Verify
         shell: bash
