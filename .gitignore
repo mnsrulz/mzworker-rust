@@ -1,0 +1,21 @@
+/target/
+**/target/
+
+# Rust lockfile is usually tracked for binaries; keep this if you want to commit it.
+# Cargo.lock
+
+# Cross build artifacts
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+**/*.a
+**/*.lib
+
+# Editor / OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
