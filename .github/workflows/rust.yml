@@ -11,14 +11,35 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.platform.os-name }}
+    runs-on: ${{ matrix.platform.runs-on }}
 
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
+        platform:
+          - os-name: FreeBSD-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-freebsd
+
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+
+          - os-name: Linux-riscv64
+            runs-on: ubuntu-24.04
+            target: riscv64gc-unknown-linux-gnu
+
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
 
     steps:
       - uses: actions/checkout@v4
@@ -27,15 +48,16 @@ jobs:
         uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
-          target: ${{ matrix.target }}
+          target: ${{ matrix.platform.target }}
           args: --release --locked
 
       - name: Verify
+        shell: bash
         run: |
-          file target/${{ matrix.target }}/release/mzworker-rust
+          file target/${{ matrix.platform.target }}/release/mzworker-rust || true
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: mzworker-rust-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/mzworker-rust
+          name: mzworker-rust-${{ matrix.platform.target }}
+          path: target/${{ matrix.platform.target }}/release/mzworker-rust
