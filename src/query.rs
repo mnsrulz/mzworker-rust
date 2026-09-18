@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
-use sqlparser::ast::{Statement, ObjectName};
+use sqlparser::ast::Statement;
 use tokio::task;
-use tracing::{debug, warn, error};
+use tracing::debug;
 
 use crate::options::{ExecuteQueryRequest, ExecuteQueryResponse, Row, Value};
 
@@ -36,7 +36,7 @@ impl std::fmt::Display for QueryError {
 
 impl std::error::Error for QueryError {}
 
-pub fn validate_query(sql: &str, data_dir: &Path) -> Result<(), QueryError> {
+pub fn validate_query(sql: &str, _data_dir: &Path) -> Result<(), QueryError> {
     let dialect = GenericDialect {};
     let ast = Parser::parse_sql(&dialect, sql)
         .map_err(|e| QueryError::SqlSyntax(e.to_string()))?;
@@ -97,7 +97,7 @@ pub async fn execute_query(
 
         let column_count = stmt.column_count() as usize;
         let mut columns: Vec<String> = (0..column_count)
-            .map(|i| stmt.column_name(i as u32).unwrap_or_default().to_string())
+            .map(|i| stmt.column_name(i).unwrap().clone())
             .collect();
 
         let mut rows: Vec<Row> = Vec::new();

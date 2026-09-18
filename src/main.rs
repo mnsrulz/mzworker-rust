@@ -8,7 +8,9 @@ mod server;
 use std::path::PathBuf;
 use std::net::SocketAddr;
 
+use tokio::net::TcpListener;
 use tokio::signal;
+use tokio_stream::wrappers::TcpListenerStream;
 use tracing::{info, error};
 use tracing_subscriber::EnvFilter;
 
@@ -42,9 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service_impl = OptionsQueryServiceImpl::new(data_dir);
     let server = service_impl.into_server();
 
+    let listener = TcpListener::bind(listen_addr).await?;
+    let incoming = TcpListenerStream::new(listener);
+
     let svc = tonic::transport::Server::builder()
         .add_service(server)
-        .serve_with_incoming_shutdown(listen_addr, shutdown_signal());
+        .serve_with_incoming_shutdown(incoming, shutdown_signal());
 
     info!("Server listening on {}", listen_addr);
 
